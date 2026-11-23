@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Laboratorio 3 — SPA con OIDC y PKCE</title>
+  <style>
+    [hidden] { display: none !important; }
+    body { font-family: system-ui, sans-serif; margin: 2rem; max-width: 72rem; }
+    .tokens { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    pre { background: #f4f4f4; padding: 1rem; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+    @media (max-width: 800px) { .tokens { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <h1>Laboratorio 3 — SPA con OIDC y PKCE</h1>
+  <button id="login">Iniciar sesión</button>
+  <button id="logout" hidden>Cerrar sesión</button>
+  <p id="status">No autenticado.</p>
+
+  <div class="tokens" id="tokens" hidden>
+    <section>
+      <h2>ID Token</h2>
+      <pre id="id-token"></pre>
+    </section>
+    <section>
+      <h2>Access Token</h2>
+      <pre id="access-token"></pre>
+    </section>
+  </div>
+
+  <script type="module">
+    import Keycloak from "./vendor/keycloak-js/keycloak.js";
+
+    const keycloak = new Keycloak({
+      url: "http://localhost:8080",
+      realm: "curso",
+      clientId: "spa-curso"
+    });
+
+    const status = document.getElementById("status");
+    const tokens = document.getElementById("tokens");
+    const loginBtn = document.getElementById("login");
+    const logoutBtn = document.getElementById("logout");
+
+    function show(element, raw, claims) {
+      element.textContent = JSON.stringify({ token: raw, claims }, null, 2);
+    }
+
+    function render() {
+      const authenticated = Boolean(keycloak.authenticated);
+      loginBtn.hidden = authenticated;
+      logoutBtn.hidden = !authenticated;
+      tokens.hidden = !authenticated;
+      if (authenticated) {
+        status.textContent = "Sesión iniciada como " + keycloak.idTokenParsed.preferred_username + ".";
+        show(document.getElementById("id-token"), keycloak.idToken, keycloak.idTokenParsed);
+        show(document.getElementById("access-token"), keycloak.token, keycloak.tokenParsed);
+      } else {
+        status.textContent = "No autenticado.";
+      }
+    }
+
+    loginBtn.addEventListener("click", () => keycloak.login());
+    logoutBtn.addEventListener("click", () => keycloak.logout({ redirectUri: window.location.origin + "/" }));
+
+    keycloak.init({ pkceMethod: "S256", checkLoginIframe: false })
+      .then(render)
+      .catch((e) => { status.textContent = "Error al iniciar Keycloak: " + e; });
+  </script>
+</body>
+</html>
