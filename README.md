@@ -159,7 +159,7 @@ comparación sea **exacta**, carácter a carácter, sin comodines.
 2. Abra el cliente `spa-curso` → pestaña **Advanced** → **Proof Key for Code Exchange Code Challenge
    Method** → `S256` → Save.
 
-> **Pregunta.** ¿Por qué este cliente se declara **público** y no incorpora un secreto, como sí harán
+> **Pregunta 2.1.** ¿Por qué este cliente se declara **público** y no incorpora un secreto, como sí harán
 > otros clientes?
 
 ---
@@ -198,7 +198,7 @@ document.querySelector("#access-token").textContent
 La consola devuelve el access token completo. Cualquier código JavaScript que se ejecute en esta
 página podría hacer exactamente lo mismo.
 
-> **Pregunta.** La teoría del módulo advierte de que tener los *tokens* en el navegador es
+> **Pregunta 3.1.** La teoría del módulo advierte de que tener los *tokens* en el navegador es
 > peligroso. A la vista de lo que se acaba de hacer en la consola, ¿por qué exactamente?
 
 ---
@@ -215,7 +215,7 @@ Compare los *claims* de los dos *tokens* que muestra la página. Ambos los ha em
   `profile` y `email`, que Keycloak concede por defecto a todo cliente nuevo; el claim `scope` del
   access token muestra cuáles se han concedido.
 
-> **Pregunta.** El ID Token y el access token tienen distinto `aud`. ¿A quién va dirigido cada uno y
+> **Pregunta 4.1.** El ID Token y el access token tienen distinto `aud`. ¿A quién va dirigido cada uno y
 > para qué sirve? ¿Qué debería hacer una API si recibiera un ID Token en lugar de un access token?
 
 ---
@@ -236,7 +236,7 @@ El resultado debe coincidir **exactamente** con el `code_challenge` que viajó e
 verificable del verifier: es la prueba de que quien reclama los *tokens* es el mismo que inició el
 proceso, y nadie más.
 
-> **Pregunta.** El `code_challenge` viaja por la red en la primera petición, a la vista de cualquiera
+> **Pregunta 5.1.** El `code_challenge` viaja por la red en la primera petición, a la vista de cualquiera
 > que pueda observarla. ¿Por qué no le sirve a un atacante para obtener el `code_verifier`?
 
 ---
@@ -283,7 +283,7 @@ URL antes de cada intento.
 Si en el segundo o el tercer intento se reutiliza el `code` del intento anterior, Keycloak responde
 `Code not valid`, aunque el verifier sea el correcto.
 
-> **Pregunta.** Tras un intento fallido, el mismo `code` ya no sirve ni siquiera con el verifier
+> **Pregunta 6.1.** Tras un intento fallido, el mismo `code` ya no sirve ni siquiera con el verifier
 > correcto. ¿Por qué invalida Keycloak el `code` aunque el canje haya fallado? ¿Qué le impediría a un
 > atacante esta decisión?
 
@@ -300,7 +300,7 @@ Por último, se comprueba que la lista de URIs de redirección se aplica de form
    redirect_uri`. La SPA ha pedido volver a `http://localhost:8081/index.html`, que no figura
    exactamente en la lista registrada.
 
-> **Pregunta.** Supóngase que, por comodidad, se hubiera registrado `http://localhost:8081/*` como
+> **Pregunta 7.1.** Supóngase que, por comodidad, se hubiera registrado `http://localhost:8081/*` como
 > URI de redirección válida. ¿Qué riesgo supone un comodín así, y por qué OAuth 2.1 exige la
 > comparación exacta?
 
