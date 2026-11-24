@@ -1,0 +1,87 @@
+Laboratorio 3 - Notas
+=====================
+
+Pegue aquí los valores a medida que los obtenga y copie a la terminal las
+líneas de órdenes. Cada bloque está en dos versiones: Linux / macOS (bash)
+y Windows (PowerShell). Use solo la de su sistema.
+
+Las variables (CHALLENGE, VERIFIER, CODE...) quedan definidas en esa
+terminal mientras no la cierre; si abre una nueva, vuelva a ejecutar sus
+líneas.
+
+
+Apartado 3 - Valores de UN MISMO inicio de sesión
+-------------------------------------------------
+Del GET a /auth (Payload) y del POST a /token (Payload). Si repite el
+inicio de sesión desde la SPA, anote de nuevo los dos.
+
+[bash]
+CHALLENGE='PEGUE_AQUI_EL_CODE_CHALLENGE'
+VERIFIER='PEGUE_AQUI_EL_CODE_VERIFIER'
+
+[PowerShell]
+$CHALLENGE = 'PEGUE_AQUI_EL_CODE_CHALLENGE'
+$VERIFIER = 'PEGUE_AQUI_EL_CODE_VERIFIER'
+
+
+Apartado 5 - Huella SHA-256 del verifier
+----------------------------------------
+Las dos líneas de salida deben mostrar exactamente el mismo valor.
+
+[bash]
+printf '%s' "$VERIFIER" | openssl dgst -binary -sha256 | openssl base64 -A | tr '+/' '-_' | tr -d '='
+echo "$CHALLENGE"
+
+[PowerShell]
+[Convert]::ToBase64String([Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::ASCII.GetBytes($VERIFIER))).TrimEnd('=').Replace('+','-').Replace('/','_')
+$CHALLENGE
+
+
+Apartado 6 - Canje de un code interceptado
+------------------------------------------
+Antes de CADA intento: en capturar-code.html pulse "Pedir un code nuevo",
+luego "Copiar", y pegue el code en la línea CODE de ese intento. Tiene
+alrededor de un minuto.
+
+En PowerShell se usa curl.exe: "curl" a secas es otra orden distinta.
+
+Intento 1. Sin verifier:
+
+[bash]
+CODE='PEGUE_AQUI_EL_CODE'
+curl -s -X POST http://localhost:8080/realms/curso/protocol/openid-connect/token \
+  -d "grant_type=authorization_code" -d "client_id=spa-curso" \
+  -d "redirect_uri=http://localhost:8081/capturar-code.html" \
+  -d "code=$CODE"
+
+[PowerShell]
+$CODE = 'PEGUE_AQUI_EL_CODE'
+curl.exe -s -X POST http://localhost:8080/realms/curso/protocol/openid-connect/token -d "grant_type=authorization_code" -d "client_id=spa-curso" -d "redirect_uri=http://localhost:8081/capturar-code.html" -d "code=$CODE"
+
+Intento 2. Verifier alterado (el suyo con cuatro letras añadidas al final):
+
+[bash]
+ALTERADO="${VERIFIER}AAAA"
+CODE='PEGUE_AQUI_EL_CODE'
+curl -s -X POST http://localhost:8080/realms/curso/protocol/openid-connect/token \
+  -d "grant_type=authorization_code" -d "client_id=spa-curso" \
+  -d "redirect_uri=http://localhost:8081/capturar-code.html" \
+  -d "code=$CODE" -d "code_verifier=$ALTERADO"
+
+[PowerShell]
+$ALTERADO = $VERIFIER + 'AAAA'
+$CODE = 'PEGUE_AQUI_EL_CODE'
+curl.exe -s -X POST http://localhost:8080/realms/curso/protocol/openid-connect/token -d "grant_type=authorization_code" -d "client_id=spa-curso" -d "redirect_uri=http://localhost:8081/capturar-code.html" -d "code=$CODE" -d "code_verifier=$ALTERADO"
+
+Intento 3. Verifier correcto:
+
+[bash]
+CODE='PEGUE_AQUI_EL_CODE'
+curl -s -X POST http://localhost:8080/realms/curso/protocol/openid-connect/token \
+  -d "grant_type=authorization_code" -d "client_id=spa-curso" \
+  -d "redirect_uri=http://localhost:8081/capturar-code.html" \
+  -d "code=$CODE" -d "code_verifier=$VERIFIER"
+
+[PowerShell]
+$CODE = 'PEGUE_AQUI_EL_CODE'
+curl.exe -s -X POST http://localhost:8080/realms/curso/protocol/openid-connect/token -d "grant_type=authorization_code" -d "client_id=spa-curso" -d "redirect_uri=http://localhost:8081/capturar-code.html" -d "code=$CODE" -d "code_verifier=$VERIFIER"

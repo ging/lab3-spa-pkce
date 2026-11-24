@@ -1,8 +1,87 @@
 <!DOCTYPE html>
 <html lang="es">
-<head><meta charset="UTF-8"><title>Captura manual del code</title></head>
+<head>
+  <meta charset="UTF-8">
+  <title>Captura manual del code</title>
+  <style>
+    [hidden] { display: none !important; }
+    body { font-family: system-ui, sans-serif; margin: 2rem; max-width: 72rem; }
+    pre { background: #f4f4f4; padding: 1rem; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+    input { width: 100%; max-width: 40rem; font-family: monospace; padding: .3rem; box-sizing: border-box; }
+  </style>
+</head>
 <body>
-  <p>Página en blanco a propósito: sin JavaScript, no consume el <code>code</code> de la URL.</p>
-  <p>Copia el valor de <code>code</code> de la barra de direcciones y vuelve a la terminal.</p>
+  <h1>Captura manual del code</h1>
+  <p>Esta página no canjea el <code>code</code>: solo lo muestra para que lo use desde la terminal.</p>
+
+  <section id="ok" hidden>
+    <h2>code</h2>
+    <pre id="code"></pre>
+    <button id="copy">Copiar</button> <span id="copied" hidden>Copiado.</span>
+  </section>
+
+  <section id="error" hidden>
+    <h2>Error devuelto por Keycloak</h2>
+    <pre id="error-text"></pre>
+  </section>
+
+  <p id="empty" hidden>Todavía no hay ningún <code>code</code>. Pegue su <code>code_challenge</code> y pulse
+    "Pedir un code nuevo".</p>
+
+  <section>
+    <h2>Pedir un code nuevo</h2>
+    <p>Cada <code>code</code> solo se puede canjear una vez y caduca en un minuto. Para cada intento,
+      pida uno nuevo con el mismo <code>code_challenge</code>.</p>
+    <label for="challenge">code_challenge</label><br>
+    <input id="challenge" autocomplete="off" spellcheck="false"><br><br>
+    <button id="new-code">Pedir un code nuevo</button>
+    <p>Petición de autorización que se abrirá:</p>
+    <pre id="auth-url"></pre>
+  </section>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const code = params.get("code");
+    const error = params.get("error");
+    if (code) {
+      document.getElementById("code").textContent = code;
+      document.getElementById("ok").hidden = false;
+      document.getElementById("copy").addEventListener("click", async () => {
+        await navigator.clipboard.writeText(code);
+        document.getElementById("copied").hidden = false;
+      });
+    } else if (error) {
+      document.getElementById("error-text").textContent =
+        error + (params.get("error_description") ? ": " + params.get("error_description") : "");
+      document.getElementById("error").hidden = false;
+    } else {
+      document.getElementById("empty").hidden = false;
+    }
+
+    const challengeInput = document.getElementById("challenge");
+    const newCodeButton = document.getElementById("new-code");
+    try { challengeInput.value = localStorage.getItem("code_challenge") || ""; } catch (e) {}
+    const authUrl = (challenge) =>
+      "http://localhost:8080/realms/curso/protocol/openid-connect/auth" +
+      "?client_id=spa-curso" +
+      "&redirect_uri=http://localhost:8081/capturar-code.html" +
+      "&response_type=code" +
+      "&scope=openid" +
+      "&code_challenge=" + encodeURIComponent(challenge) +
+      "&code_challenge_method=S256";
+    const refresh = () => {
+      const challenge = challengeInput.value.trim();
+      newCodeButton.disabled = challenge === "";
+      document.getElementById("auth-url").textContent = authUrl(challenge || "CODE_CHALLENGE");
+    };
+    challengeInput.addEventListener("input", refresh);
+    refresh();
+
+    newCodeButton.addEventListener("click", () => {
+      const challenge = challengeInput.value.trim();
+      try { localStorage.setItem("code_challenge", challenge); } catch (e) {}
+      location.href = authUrl(challenge);
+    });
+  </script>
 </body>
 </html>

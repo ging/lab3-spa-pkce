@@ -106,6 +106,25 @@ terminan en el navegador, y por eso Keycloak tiene que autorizar expresamente al
 `http://localhost:8081` a hacerle peticiones (el ajuste *Web origins* del apartado 2, que el
 navegador exige por la política de CORS).
 
+> **Antes de empezar: abra `notas.txt`.** Durante la práctica hay que anotar varios valores (el
+> `code_challenge` y el `code_verifier` del apartado 3, los `code` del apartado 6) y usarlos después
+> en órdenes de terminal. El repositorio incluye el fichero `notas.txt`, una plantilla con un hueco
+> para cada valor y las órdenes de los apartados 5 y 6 ya escritas, en versión para Linux (bash) y
+> para Windows (PowerShell). Ábralo con un editor de texto
+> (`nano notas.txt`, o el que prefiera), pegue cada valor en su hueco y copie las líneas a la terminal:
+> así no hay que editar ninguna orden por dentro.
+>
+> **Algunos valores caducan.** Si una orden que debería funcionar falla, compruebe primero que no está
+> usando un valor caducado o ya gastado:
+>
+> - Cada `code` caduca en torno a **un minuto** y solo se puede canjear **una vez**.
+> - La sesión de Diego en Keycloak caduca tras **30 minutos** sin actividad; a partir de ahí, Keycloak
+>   vuelve a pedir la contraseña.
+> - El `code_challenge` y el `code_verifier` van **por parejas**: cada inicio de sesión desde la SPA
+>   genera una pareja nueva. Si repite el inicio de sesión, anote de nuevo los dos.
+>
+> El apartado [Resolución de problemas](#resolución-de-problemas) recoge los síntomas de cada caso.
+
 ---
 
 ## 1. Puesta en marcha
@@ -147,17 +166,22 @@ Keycloak devuelve el `code` a la dirección que indique la aplicación en el par
 pero solo si esa dirección figura en la lista registrada para el cliente. OAuth 2.1 exige que la
 comparación sea **exacta**, carácter a carácter, sin comodines.
 
-1. Consola de administración → realm `curso` → **Clients** → **Create client**.
+1. Entre en la consola de administración (`http://localhost:8080/`, `admin` / `admin`).
+
+   > **Nota.** La consola se abre en el realm `master`. Cambie al realm `curso` desde el menú lateral
+   > → **Manage realms** → `curso`, y compruebe que arriba a la izquierda aparece `curso` *Current realm*.
+   > Si crea el cliente en `master`, el inicio de sesión fallará porque el realm no es el correcto.
+
+2. Realm `curso` → **Clients** → **Create client**.
    - Client ID = `spa-curso` → Next.
-   - **Client authentication = OFF** (público), **Standard flow = ON**, el resto OFF → Next.
+   - **Client authentication = OFF** (público), **Standard flow = ON**, el resto OFF.
+   - **Require PKCE = ON**. Al activarlo aparece **PKCE Method**: compruebe que vale `S256` → Next.
    - **Valid redirect URIs**: añada estas dos direcciones, exactamente así (con el botón para añadir
      una segunda línea):
      - `http://localhost:8081/`
      - `http://localhost:8081/capturar-code.html`
    - **Valid post logout redirect URIs** = `http://localhost:8081/`
    - **Web origins** = `http://localhost:8081` → Save.
-2. Abra el cliente `spa-curso` → pestaña **Advanced** → **Proof Key for Code Exchange Code Challenge
-   Method** → `S256` → Save.
 
 > **Pregunta 2.1.** ¿Por qué este cliente se declara **público** y no incorpora un secreto, como sí harán
 > otros clientes?
@@ -173,18 +197,18 @@ El objetivo de este apartado es observar el intercambio paso a paso.
    Esta última opción es imprescindible: sin ella, las redirecciones del flujo borrarían las
    peticiones anteriores y no se vería la secuencia completa.
 2. Pulse **"Iniciar sesión"** y siga, en la pestaña de red, las peticiones que se van produciendo:
-   - Una petición **GET** a `.../openid-connect/auth` que incluye los parámetros `code_challenge`,
-     `code_challenge_method=S256` y `redirect_uri=http://localhost:8081/`. Anote el valor del
-     `code_challenge`: se necesitará en el apartado 5.
-   - Inicie sesión como `diego` (contraseña `diego`). Aparecerá también un POST a
-     `.../authenticate`, que corresponde al envío del formulario de la propia pantalla de Keycloak;
-     no forma parte del intercambio OAuth y puede ignorarse.
-   - El navegador regresa a la SPA. El `code` llega en el *fragmento* de la URL (la parte tras `#`),
-     que por diseño no se envía al servidor; por eso no figura como una petición de red, sino que lo
-     lee la propia página mediante JavaScript.
+   - Una petición **GET** a `.../openid-connect/auth` (la dirección completa está en **Headers** →
+     *Request URL*, y los parámetros, desglosados, en **Payload**) que incluye `code_challenge`,
+     `code_challenge_method=S256` y `redirect_uri=http://localhost:8081/`. Copie el valor del
+     `code_challenge` en la línea `CHALLENGE=` de `notas.txt`: se necesitará en los apartados 5 y 6.
+   - Inicie sesión como `diego` (contraseña `diego`). Aparecerá un POST a `.../authenticate`, el
+     envío del formulario de la pantalla de Keycloak. Su respuesta es una redirección (302): en
+     **Headers** → *Response Headers*, la cabecera **`Location`** devuelve el navegador a la SPA
+     (`http://localhost:8081/#...&code=...`). Localice en ella el `code`: es el código de autorización
+     que Keycloak entrega a la SPA.
    - Una petición **POST** a `.../openid-connect/token` que lleva en el cuerpo el `code`, el
-     `code_verifier` y el `client_id`. Esta es la petición clave del flujo; localícela y anote el
-     `code_verifier`, que también se necesitará en el apartado 5.
+     `code_verifier` y el `client_id`. Esta es la petición clave del flujo; localícela y copie el
+     `code_verifier` en la línea `VERIFIER=` de `notas.txt`.
 3. La página muestra ahora los dos *tokens* recibidos, el **ID Token** y el **access token**, cada uno
    en crudo y con sus *claims* ya decodificados.
 
@@ -223,16 +247,17 @@ Compare los *claims* de los dos *tokens* que muestra la página. Ambos los ha em
 ## 5. Comprobación criptográfica manual
 
 Este es el único punto de todo el curso en el que se manipula criptografía a mano, y apenas lleva un
-par de minutos. Con el `code_challenge` (de la petición a `/auth`) y el `code_verifier` (de la
-petición a `/token`) anotados en el apartado 3, calcule la huella SHA-256 del verifier:
+par de minutos. Copie a la terminal las líneas `CHALLENGE=` y `VERIFIER=` de `notas.txt`, ya con
+los valores anotados en el apartado 3, y después las dos órdenes del apartado 5. La primera calcula
+la huella SHA-256 del verifier (en base64url sin relleno, el formato de PKCE); la segunda muestra el
+`code_challenge` para compararlo:
 
 ```bash
-printf '%s' 'EL_CODE_VERIFIER_DE_LA_PETICION' | openssl dgst -binary -sha256 | openssl base64 -A \
-  | tr '+/' '-_' | tr -d '='
+printf '%s' "$VERIFIER" | openssl dgst -binary -sha256 | openssl base64 -A | tr '+/' '-_' | tr -d '='
+echo "$CHALLENGE"
 ```
 
-El resultado debe coincidir **exactamente** con el `code_challenge` que viajó en la petición a
-`/auth`. Esta comprobación demuestra que el *challenge* no es un valor arbitrario, sino la huella
+Las dos líneas deben coincidir **exactamente**. Esta comprobación demuestra que el *challenge* no es un valor arbitrario, sino la huella
 verificable del verifier: es la prueba de que quien reclama los *tokens* es el mismo que inició el
 proceso, y nadie más.
 
@@ -246,38 +271,42 @@ proceso, y nadie más.
 Se trata ahora de demostrar, de forma práctica, que un `code` interceptado no sirve de nada sin el
 `code_verifier` exacto. Como el código del inicio de sesión legítimo ya se consumió (un `code` solo
 puede canjearse una vez), hay que generar códigos nuevos y dirigirlos a una página que no los consuma
-automáticamente: `capturar-code.html`, una página en blanco registrada en el apartado 2.
+automáticamente: `capturar-code.html`, registrada en el apartado 2, que se limita a mostrar el `code`
+recibido sin canjearlo.
 
-Para obtener un `code` nuevo, construya la siguiente URL (sustituyendo `CODE_CHALLENGE` por el valor
-anotado) y ábrala en el navegador:
+Abra `http://localhost:8081/capturar-code.html`, pegue su `code_challenge` en el campo de la página y
+pulse **"Pedir un code nuevo"**. La página abre una petición de autorización como la que hizo la SPA
+en el apartado 3, y la muestra debajo del botón:
 
 ```
 http://localhost:8080/realms/curso/protocol/openid-connect/auth?client_id=spa-curso&redirect_uri=http://localhost:8081/capturar-code.html&response_type=code&scope=openid&code_challenge=CODE_CHALLENGE&code_challenge_method=S256
 ```
 
-Como Diego ya tiene una sesión activa, se aterriza directamente en `capturar-code.html` con un `code`
-nuevo en la barra de direcciones (el valor que sigue a `code=`). Cada `code` caduca en
-aproximadamente **un minuto**, así que conviene tener preparada la orden de `curl` antes de abrir la
-URL.
+Hay dos diferencias con la del apartado 3. La `redirect_uri` apunta a `capturar-code.html`, de modo
+que el `code` vuelve a esta página y no a la SPA, que lo canjearía al instante. Y el `code_challenge`
+es el que anotó: Keycloak asocia el `code` nuevo a ese *challenge*, así que solo podrá canjearse con su
+`code_verifier`. Como Diego ya tiene una sesión activa, Keycloak no pide la contraseña y se vuelve
+directamente a `capturar-code.html`, que muestra el `code` con un botón para copiarlo.
 
-Realice los tres intentos siguientes. **Cada uno necesita un `code` nuevo**: vuelva a abrir la misma
-URL antes de cada intento.
+Realice los tres intentos siguientes. **Cada uno necesita un `code` nuevo**: antes de cada intento,
+pulse **"Pedir un code nuevo"** (recargar la página no sirve: volvería a mostrar el mismo `code`), luego
+**Copiar**, y pegue el `code` en la línea `CODE=` de ese intento en `notas.txt`. Cada `code` caduca en
+aproximadamente **un minuto**: copie a la terminal la línea `CODE=` y la orden `curl` sin demora.
 
 1. **Sin verifier**, como lo intentaría un atacante que solo hubiera interceptado el `code`:
    ```bash
+   CODE='PEGUE_AQUI_EL_CODE'
    curl -s -X POST http://localhost:8080/realms/curso/protocol/openid-connect/token \
-     -H "Content-Type: application/x-www-form-urlencoded" \
-     -d "grant_type=authorization_code" \
-     -d "client_id=spa-curso" \
-     -d "code=PEGAR_AQUI_EL_CODE" \
-     -d "redirect_uri=http://localhost:8081/capturar-code.html"
+     -d "grant_type=authorization_code" -d "client_id=spa-curso" \
+     -d "redirect_uri=http://localhost:8081/capturar-code.html" \
+     -d "code=$CODE"
    ```
    Keycloak lo rechaza: `invalid_grant`, `PKCE code verifier not specified`.
-2. **Con un verifier alterado**: repita la orden añadiendo
-   `-d "code_verifier=..."` con el verifier anotado, pero **cambiando un solo carácter**. Keycloak lo
-   rechaza de nuevo, esta vez con `PKCE verification failed: Code mismatch`.
-3. **Con el verifier correcto**: repita la orden con el `code_verifier` exacto. Esta vez Keycloak
-   devuelve los *tokens*, lo que confirma que los rechazos anteriores se debían exactamente al
+2. **Con un verifier alterado**: la misma orden, con `-d "code_verifier=$ALTERADO"` al final.
+   `ALTERADO` es su verifier con cuatro letras añadidas al final (`notas.txt` lo construye solo).
+   Keycloak lo rechaza de nuevo, esta vez con `PKCE verification failed: Code mismatch`.
+3. **Con el verifier correcto**: la misma orden, con `-d "code_verifier=$VERIFIER"` al final. Esta vez
+   Keycloak devuelve los *tokens*, lo que confirma que los rechazos anteriores se debían exactamente al
    verifier y no a ninguna otra causa.
 
 Si en el segundo o el tercer intento se reutiliza el `code` del intento anterior, Keycloak responde
@@ -294,8 +323,9 @@ Si en el segundo o el tercer intento se reutiliza el `code` del intento anterior
 Por último, se comprueba que la lista de URIs de redirección se aplica de forma estricta.
 
 1. Cierre la sesión en la SPA (botón **Cerrar sesión**).
-2. Abra la SPA con una dirección ligeramente distinta: `http://localhost:8081/index.html`. Es la
-   misma página, servida por el mismo `nginx`.
+2. Abra `http://localhost:8081/index.html`. Es la misma página que `http://localhost:8081/`, servida
+   por el mismo `nginx`, pero su dirección no es ninguna de las **Valid redirect URIs** registradas en
+   el apartado 2.
 3. Pulse **"Iniciar sesión"**. Keycloak no muestra el formulario, sino un error: `Invalid parameter:
    redirect_uri`. La SPA ha pedido volver a `http://localhost:8081/index.html`, que no figura
    exactamente en la lista registrada.
@@ -315,8 +345,16 @@ Por último, se comprueba que la lista de URIs de redirección se aplica de form
 - Al pulsar "Iniciar sesión" desde `http://localhost:8081/`, Keycloak responde `Invalid parameter:
   redirect_uri` → revise que las URIs del apartado 2 se escribieron exactamente igual, incluida la
   barra final.
-- El canje con `curl` responde `Code not valid` → el `code` ya se había usado o ha caducado. Vuelva a
-  abrir la URL del apartado 6 para obtener uno nuevo y repita el intento sin demora.
+- El canje con `curl` responde `Code not valid` → el `code` ya se había usado o ha caducado (dura un
+  minuto). Pulse **"Pedir un code nuevo"** en `capturar-code.html` y repita el intento sin demora. Si
+  ocurre siempre, compruebe que ejecutó la línea `CODE=` en la misma terminal que el `curl`: las
+  variables se pierden al abrir una terminal nueva.
+- Al pedir un `code` nuevo aparece el formulario de inicio de sesión de Keycloak → la sesión de Diego
+  ha caducado (30 minutos sin actividad). Inicie sesión de nuevo como `diego`; el `code_challenge` y
+  el `code_verifier` anotados siguen sirviendo.
+- En el apartado 5 la huella calculada no coincide con el `code_challenge` → el `code_challenge` y el
+  `code_verifier` son de inicios de sesión distintos, o al copiar se ha colado un espacio o un salto
+  de línea. Anote los dos de un mismo inicio de sesión.
 - `docker compose up` falla porque algún puerto está ocupado → el Keycloak de un laboratorio anterior
   sigue en marcha. Deténgalo con `docker compose down` en la carpeta de aquel laboratorio.
 - Para reiniciar el entorno desde cero (se pierde el cliente creado y el realm se vuelve a importar):
